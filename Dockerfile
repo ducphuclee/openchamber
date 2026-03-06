@@ -13,10 +13,11 @@ RUN apt-get update && \
         git \
         python3 \
         openssh-client \
-        ca-certificates && \
+        ca-certificates \
+        unzip && \
     rm -rf /var/lib/apt/lists/*
 
-# install bun globally
+# install bun
 RUN curl -fsSL https://bun.sh/install | bash && \
     mv /root/.bun/bin/bun /usr/local/bin/bun
 
@@ -60,7 +61,8 @@ RUN apt-get update && \
         openssh-client \
         python3 \
         ca-certificates \
-        curl && \
+        curl \
+        unzip && \
     rm -rf /var/lib/apt/lists/*
 
 ########################################
@@ -70,7 +72,7 @@ RUN curl -fsSL https://bun.sh/install | bash && \
     mv /root/.bun/bin/bun /usr/local/bin/bun
 
 ########################################
-# ensure user 1000 exists
+# ensure UID 1000 user exists
 ########################################
 RUN if ! id -u 1000 >/dev/null 2>&1; then \
       useradd -u 1000 -m -s /bin/bash openchamber; \
@@ -100,7 +102,7 @@ RUN npm config set prefix /home/openchamber/.npm-global && \
     npm install -g opencode-ai
 
 ########################################
-# copy app
+# copy built app
 ########################################
 COPY --chown=1000:1000 --from=builder /app/package.json ./package.json
 COPY --chown=1000:1000 --from=builder /app/packages/web/package.json ./packages/web/package.json
