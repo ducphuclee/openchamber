@@ -13,7 +13,7 @@ services:
       - /home/ubuntu/configs/opencode/data/openchamber:/home/openchamber/.config/openchamber
       - /home/ubuntu/configs/opencode/data/opencode/share:/home/openchamber/.local/share/opencode
       - /home/ubuntu/configs/opencode/data/opencode/state:/home/openchamber/.local/state/opencode
-      - /home/ubuntu/configs/opencode//data/opencode/config:/home/openchamber/.config/opencode
-      - /home/ubuntu/configs/opencode//data/ssh:/home/openchamber/.ssh
-      - /home/ubuntu/configs/opencode//workspaces:/home/openchamber/workspaces
+      - /home/ubuntu/configs/opencode/data/opencode/config:/home/openchamber/.config/opencode
+      - /home/ubuntu/configs/opencode/data/ssh:/home/openchamber/.ssh
+      - /home/ubuntu/configs/opencode/workspaces:/home/openchamber/workspaces
     restart: unless-stopped
