@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1
-FROM archlinux:latest AS base
+FROM arm64v8/archlinux:latest AS base
 WORKDIR /app
+
+
 
 # Install build dependencies in base stage
 RUN pacman -Sy --noconfirm --needed bun  && \
