@@ -16,9 +16,11 @@ RUN apt-get update && \
         ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-RUN curl -fsSL https://bun.sh/install | bash && \
-    mv /root/.bun/bin/bun /usr/local/bin/bun
-    
+# install bun
+RUN curl -fsSL https://bun.sh/install | bash
+
+ENV PATH="/root/.bun/bin:$PATH"
+
 ########################################
 # Dependencies
 ########################################
@@ -35,7 +37,7 @@ COPY packages/vscode/package.json ./packages/vscode/
 RUN bun install --frozen-lockfile
 
 ########################################
-# Build stage
+# Build
 ########################################
 FROM deps AS builder
 
@@ -45,11 +47,13 @@ COPY . .
 RUN bun run build:web
 
 ########################################
-# Runtime image
+# Runtime
 ########################################
 FROM node:20-bookworm-slim AS runtime
 
 ENV NODE_ENV=production
+
+WORKDIR /home/openchamber
 
 RUN apt-get update && \
     apt-get install -y \
@@ -60,11 +64,15 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 ########################################
-# Create user (UID 1000)
+# Copy bun from base stage
 ########################################
-RUN if ! id -u 1000 >/dev/null 2>&1; then \
-      useradd -u 1000 -g 1000 -m -s /bin/bash openchamber; \
-    fi
+COPY --from=base /root/.bun /root/.bun
+ENV PATH="/root/.bun/bin:$PATH"
+
+########################################
+# Create user 1000
+########################################
+RUN useradd -u 1000 -m -s /bin/bash openchamber
 
 ########################################
 # Prepare directories
@@ -76,23 +84,21 @@ RUN mkdir -p \
     chown -R 1000:1000 /home/openchamber
 
 ########################################
-# Switch to non-root user
+# Switch user
 ########################################
 USER 1000:1000
 
-WORKDIR /home/openchamber
-
 ########################################
-# npm global config
+# npm global
 ########################################
 ENV NPM_CONFIG_PREFIX=/home/openchamber/.npm-global
-ENV PATH=$NPM_CONFIG_PREFIX/bin:$PATH
+ENV PATH=$NPM_CONFIG_PREFIX/bin:/root/.bun/bin:$PATH
 
 RUN npm config set prefix /home/openchamber/.npm-global && \
     npm install -g opencode-ai
 
 ########################################
-# Copy built app
+# Copy app
 ########################################
 COPY --chown=1000:1000 --from=builder /app/package.json ./package.json
 COPY --chown=1000:1000 --from=builder /app/packages/web/package.json ./packages/web/package.json
@@ -106,7 +112,7 @@ COPY --chown=1000:1000 --from=deps /app/packages/web/node_modules ./packages/web
 COPY --chmod=755 scripts/docker-entrypoint.sh /app/openchamber-entrypoint.sh
 
 ########################################
-# Expose port
+# Port
 ########################################
 EXPOSE 3000
 
