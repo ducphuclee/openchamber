@@ -16,10 +16,9 @@ RUN apt-get update && \
         ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
-# install bun
-RUN curl -fsSL https://bun.sh/install | bash
-
-ENV PATH="/root/.bun/bin:$PATH"
+# install bun globally
+RUN curl -fsSL https://bun.sh/install | bash && \
+    mv /root/.bun/bin/bun /usr/local/bin/bun
 
 ########################################
 # Dependencies
@@ -60,31 +59,34 @@ RUN apt-get update && \
         git \
         openssh-client \
         python3 \
-        ca-certificates && \
+        ca-certificates \
+        curl && \
     rm -rf /var/lib/apt/lists/*
 
 ########################################
-# Copy bun from base stage
+# install bun in runtime
 ########################################
-COPY --from=base /root/.bun /root/.bun
-ENV PATH="/root/.bun/bin:$PATH"
+RUN curl -fsSL https://bun.sh/install | bash && \
+    mv /root/.bun/bin/bun /usr/local/bin/bun
 
 ########################################
-# Create user 1000
+# ensure user 1000 exists
 ########################################
-RUN useradd -u 1000 -m -s /bin/bash openchamber
+RUN if ! id -u 1000 >/dev/null 2>&1; then \
+      useradd -u 1000 -m -s /bin/bash openchamber; \
+    fi
 
 ########################################
-# Prepare directories
+# directories
 ########################################
 RUN mkdir -p \
-    /home/openchamber/.npm-global \
+    /home/openchamber/.ssh \
     /home/openchamber/.config \
-    /home/openchamber/.ssh && \
+    /home/openchamber/.npm-global && \
     chown -R 1000:1000 /home/openchamber
 
 ########################################
-# Switch user
+# switch user
 ########################################
 USER 1000:1000
 
@@ -92,13 +94,13 @@ USER 1000:1000
 # npm global
 ########################################
 ENV NPM_CONFIG_PREFIX=/home/openchamber/.npm-global
-ENV PATH=$NPM_CONFIG_PREFIX/bin:/root/.bun/bin:$PATH
+ENV PATH=/home/openchamber/.npm-global/bin:/usr/local/bin:$PATH
 
 RUN npm config set prefix /home/openchamber/.npm-global && \
     npm install -g opencode-ai
 
 ########################################
-# Copy app
+# copy app
 ########################################
 COPY --chown=1000:1000 --from=builder /app/package.json ./package.json
 COPY --chown=1000:1000 --from=builder /app/packages/web/package.json ./packages/web/package.json
@@ -112,7 +114,7 @@ COPY --chown=1000:1000 --from=deps /app/packages/web/node_modules ./packages/web
 COPY --chmod=755 scripts/docker-entrypoint.sh /app/openchamber-entrypoint.sh
 
 ########################################
-# Port
+# port
 ########################################
 EXPOSE 3000
 
