@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM arm64v8/archlinux:latest AS base
+FROM node:20-bookworm AS base
 WORKDIR /app
 
 
