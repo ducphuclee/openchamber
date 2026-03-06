@@ -16,4 +16,5 @@ services:
       - /home/ubuntu/configs/opencode/data/opencode/config:/home/openchamber/.config/opencode
       - /home/ubuntu/configs/opencode/data/ssh:/home/openchamber/.ssh
       - /home/ubuntu/configs/opencode/workspaces:/home/openchamber/workspaces
+      - /home/ubuntu/configs/graphiti/data:/home/openchamber/app-db
     restart: unless-stopped
