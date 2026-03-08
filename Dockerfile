@@ -5,22 +5,19 @@
 ########################################
 FROM node:20-bookworm AS base
 
-# Lấy uv chính thức
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 WORKDIR /app
 
-# Mở khóa bộ nhớ cache của apt trong ảnh Debian/Ubuntu mặc định
 RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
 
-# Sử dụng cache cho apt-get để không tải lại các package hệ thống
+# Bỏ --no-install-recommends và thêm build-essential để hỗ trợ node-gyp
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
-    apt-get install -y --no-install-recommends \
-        curl git python3 openssh-client ca-certificates unzip
+    apt-get install -y \
+        curl git python3 openssh-client ca-certificates unzip build-essential
 
-# Cài đặt Bun
 RUN curl -fsSL https://bun.sh/install | bash && \
     mv /root/.bun/bin/bun /usr/local/bin/bun
 
@@ -31,14 +28,12 @@ FROM base AS deps
 
 WORKDIR /app
 
-# Chỉ copy file lock trước để tận dụng Docker layer cache
 COPY package.json bun.lock ./
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/web/package.json ./packages/web/
 COPY packages/desktop/package.json ./packages/desktop/
 COPY packages/vscode/package.json ./packages/vscode/
 
-# Sử dụng cache cho bun để lưu các gói đã tải
 RUN --mount=type=cache,target=/root/.bun/install/cache \
     bun install --frozen-lockfile
 
@@ -69,10 +64,11 @@ COPY --from=base /usr/local/bin/bun /usr/local/bin/bun
 
 RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
 
+# Ở runtime thì không cần build-essential nữa cho nhẹ
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
-    apt-get install -y --no-install-recommends \
+    apt-get install -y \
         git openssh-client python3 ca-certificates curl unzip
 
 ########################################
@@ -85,7 +81,6 @@ RUN groupadd -g 1001 openchamber && \
 
 USER 1001:1001
 
-# Sử dụng cache cho npm global, lưu ý set uid/gid để user openchamber có quyền ghi vào cache
 RUN --mount=type=cache,target=/home/openchamber/.npm,uid=1001,gid=1001 \
     npm config set prefix /home/openchamber/.npm-global && \
     npm install -g opencode-ai
