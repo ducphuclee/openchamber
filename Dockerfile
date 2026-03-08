@@ -1,24 +1,24 @@
 FROM node:20-bookworm-slim
 
 ENV NODE_ENV=production \
-    NPM_CONFIG_PREFIX=/home/openchamber/.npm-global \
-    PATH=/home/openchamber/.npm-global/bin:/usr/local/bin:$PATH \
-    UV_SYSTEM_PYTHON=1
+    UV_SYSTEM_PYTHON=1 \
+    BUN_INSTALL=/home/openchamber/.bun \
+    PATH=/home/openchamber/.bun/bin:/usr/local/bin:$PATH
 
 WORKDIR /home/openchamber
 
 ########################################
-# uv (python package manager)
+# uv
 ########################################
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
 ########################################
-# bun runtime
+# bun
 ########################################
 COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
 
 ########################################
-# runtime packages
+# packages
 ########################################
 RUN apt-get update && apt-get install -y \
     curl \
@@ -31,15 +31,16 @@ RUN apt-get update && apt-get install -y \
  && rm -rf /var/lib/apt/lists/*
 
 ########################################
-# user 1001:1001 (match docker compose)
+# user
 ########################################
 RUN groupadd -g 1001 openchamber && \
     useradd -u 1001 -g 1001 -m -s /bin/bash openchamber
 
 ########################################
-# directories used by volumes
+# directories
 ########################################
 RUN mkdir -p \
+ /home/openchamber/.bun \
  /home/openchamber/.config/openchamber \
  /home/openchamber/.config/opencode \
  /home/openchamber/.local/share/opencode \
@@ -48,9 +49,8 @@ RUN mkdir -p \
  /home/openchamber/workspaces \
  /home/openchamber/app-db
 
-########################################
-# switch user
-########################################
+RUN chown -R 1001:1001 /home/openchamber
+
 USER 1001:1001
 
 ########################################
