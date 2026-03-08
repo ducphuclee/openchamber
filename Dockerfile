@@ -11,12 +11,15 @@ WORKDIR /app
 
 RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
 
-# Bỏ --no-install-recommends và thêm build-essential để hỗ trợ node-gyp
+# Bổ sung build-essential (make, g++) và python-is-python3 để node-gyp hoạt động trơn tru
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
     apt-get install -y \
-        curl git python3 openssh-client ca-certificates unzip build-essential
+        curl git python3 python-is-python3 openssh-client ca-certificates unzip build-essential
+
+# Cài đặt trực tiếp node-gyp global để Bun gọi được lệnh này từ terminal
+RUN npm install -g node-gyp
 
 RUN curl -fsSL https://bun.sh/install | bash && \
     mv /root/.bun/bin/bun /usr/local/bin/bun
@@ -64,12 +67,12 @@ COPY --from=base /usr/local/bin/bun /usr/local/bin/bun
 
 RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
 
-# Ở runtime thì không cần build-essential nữa cho nhẹ
+# Runtime không cần build-essential (làm nhẹ image)
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && \
     apt-get install -y \
-        git openssh-client python3 ca-certificates curl unzip
+        git openssh-client python3 python-is-python3 ca-certificates curl unzip
 
 ########################################
 # User 1001:1001
