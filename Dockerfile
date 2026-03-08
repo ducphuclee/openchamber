@@ -18,7 +18,7 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 COPY --from=oven/bun:1 /usr/local/bin/bun /usr/local/bin/bun
 
 ########################################
-# packages
+# system packages
 ########################################
 RUN apt-get update && apt-get install -y \
     curl \
@@ -26,6 +26,7 @@ RUN apt-get update && apt-get install -y \
     openssh-client \
     python3 \
     python-is-python3 \
+    build-essential \
     ca-certificates \
     unzip \
  && rm -rf /var/lib/apt/lists/*
@@ -36,9 +37,6 @@ RUN apt-get update && apt-get install -y \
 RUN groupadd -g 1001 openchamber && \
     useradd -u 1001 -g 1001 -m -s /bin/bash openchamber
 
-########################################
-# directories
-########################################
 RUN mkdir -p \
  /home/openchamber/.bun \
  /home/openchamber/.config/openchamber \
