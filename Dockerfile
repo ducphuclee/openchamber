@@ -1,123 +1,109 @@
 # syntax=docker/dockerfile:1
 
 ########################################
-# Base image
+# STAGE 1: Base - Cài đặt công cụ lõi
 ########################################
 FROM node:20-bookworm AS base
 
+# Lấy uv chính thức
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 WORKDIR /app
 
-RUN apt-get update && \
-    apt-get install -y \
-        curl \
-        git \
-        python3 \
-        openssh-client \
-        ca-certificates \
-        unzip && \
-    rm -rf /var/lib/apt/lists/*
+# Mở khóa bộ nhớ cache của apt trong ảnh Debian/Ubuntu mặc định
+RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
 
-# install bun
+# Sử dụng cache cho apt-get để không tải lại các package hệ thống
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl git python3 openssh-client ca-certificates unzip
+
+# Cài đặt Bun
 RUN curl -fsSL https://bun.sh/install | bash && \
     mv /root/.bun/bin/bun /usr/local/bin/bun
 
 ########################################
-# Dependencies
+# STAGE 2: Deps - Cài đặt dependencies với Cache
 ########################################
 FROM base AS deps
 
 WORKDIR /app
 
+# Chỉ copy file lock trước để tận dụng Docker layer cache
 COPY package.json bun.lock ./
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/web/package.json ./packages/web/
 COPY packages/desktop/package.json ./packages/desktop/
 COPY packages/vscode/package.json ./packages/vscode/
 
-RUN bun install --frozen-lockfile
+# Sử dụng cache cho bun để lưu các gói đã tải
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --frozen-lockfile
 
 ########################################
-# Build
+# STAGE 3: Builder - Build mã nguồn
 ########################################
 FROM deps AS builder
 
 WORKDIR /app
 COPY . .
-
 RUN bun run build:web
 
 ########################################
-# Runtime
+# STAGE 4: Runtime - Image cuối cùng
 ########################################
 FROM node:20-bookworm-slim AS runtime
 
-ENV NODE_ENV=production
+ENV NODE_ENV=production \
+    UV_SYSTEM_PYTHON=1 \
+    UV_LINK_MODE=copy \
+    NPM_CONFIG_PREFIX=/home/openchamber/.npm-global \
+    PATH=/home/openchamber/.npm-global/bin:/usr/local/bin:$PATH
 
 WORKDIR /home/openchamber
 
-RUN apt-get update && \
-    apt-get install -y \
-        git \
-        openssh-client \
-        python3 \
-        ca-certificates \
-        curl \
-        unzip && \
-    rm -rf /var/lib/apt/lists/*
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+COPY --from=base /usr/local/bin/bun /usr/local/bin/bun
+
+RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+        git openssh-client python3 ca-certificates curl unzip
 
 ########################################
-# install bun in runtime
+# User 1001:1001
 ########################################
-RUN curl -fsSL https://bun.sh/install | bash && \
-    mv /root/.bun/bin/bun /usr/local/bin/bun
+RUN groupadd -g 1001 openchamber && \
+    useradd -u 1001 -g 1001 -m -s /bin/bash openchamber && \
+    mkdir -p /home/openchamber/.ssh /home/openchamber/.config /home/openchamber/.npm-global && \
+    chown -R 1001:1001 /home/openchamber
 
-########################################
-# ensure UID 1000 user exists
-########################################
-RUN if ! id -u 1000 >/dev/null 2>&1; then \
-      useradd -u 1000 -m -s /bin/bash openchamber; \
-    fi
+USER 1001:1001
 
-########################################
-# directories
-########################################
-RUN mkdir -p \
-    /home/openchamber/.ssh \
-    /home/openchamber/.config \
-    /home/openchamber/.npm-global && \
-    chown -R 1000:1000 /home/openchamber
-
-########################################
-# switch user
-########################################
-USER 1000:1000
-
-########################################
-# npm global
-########################################
-ENV NPM_CONFIG_PREFIX=/home/openchamber/.npm-global
-ENV PATH=/home/openchamber/.npm-global/bin:/usr/local/bin:$PATH
-
-RUN npm config set prefix /home/openchamber/.npm-global && \
+# Sử dụng cache cho npm global, lưu ý set uid/gid để user openchamber có quyền ghi vào cache
+RUN --mount=type=cache,target=/home/openchamber/.npm,uid=1001,gid=1001 \
+    npm config set prefix /home/openchamber/.npm-global && \
     npm install -g opencode-ai
 
 ########################################
-# copy built app
+# Copy mã nguồn
 ########################################
-COPY --chown=1000:1000 --from=builder /app/package.json ./package.json
-COPY --chown=1000:1000 --from=builder /app/packages/web/package.json ./packages/web/package.json
-COPY --chown=1000:1000 --from=builder /app/packages/web/bin ./packages/web/bin
-COPY --chown=1000:1000 --from=builder /app/packages/web/server ./packages/web/server
-COPY --chown=1000:1000 --from=builder /app/packages/web/dist ./packages/web/dist
+COPY --chown=1001:1001 --from=builder /app/package.json ./package.json
+COPY --chown=1001:1001 --from=builder /app/packages/web/package.json ./packages/web/package.json
+COPY --chown=1001:1001 --from=builder /app/packages/web/bin ./packages/web/bin
+COPY --chown=1001:1001 --from=builder /app/packages/web/server ./packages/web/server
+COPY --chown=1001:1001 --from=builder /app/packages/web/dist ./packages/web/dist
 
-COPY --chown=1000:1000 --from=deps /app/node_modules ./node_modules
-COPY --chown=1000:1000 --from=deps /app/packages/web/node_modules ./packages/web/node_modules
+COPY --chown=1001:1001 --from=deps /app/node_modules ./node_modules
+COPY --chown=1001:1001 --from=deps /app/packages/web/node_modules ./packages/web/node_modules
 
 COPY --chmod=755 scripts/docker-entrypoint.sh /app/openchamber-entrypoint.sh
 
-########################################
-# port
-########################################
 EXPOSE 3000
 
 ENTRYPOINT ["/app/openchamber-entrypoint.sh"]
